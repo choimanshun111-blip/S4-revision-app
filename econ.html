@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Econ 老師管理後台</title>
+  <style>
+    :root {
+      --primary-color: #ff6600;
+      --bg-color: #f4f7f6;
+      --card-bg: #ffffff;
+      --text-color: #333333;
+      --border-color: #dddddd;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+    }
+    .top-nav {
+      background-color: #222;
+      color: white;
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .top-nav h1 { margin: 0; font-size: 20px; }
+    
+    .container {
+      max-width: 1000px;
+      margin: 20px auto;
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    }
+    
+    /* 登入區塊 */
+    #login-panel { max-width: 400px; margin: 40px auto; display: block; }
+    #admin-panel { display: none; }
+
+    /* 頁籤設計 */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 12px 25px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn:hover { color: var(--primary-color); }
+    .tab-btn.active {
+      color: var(--primary-color);
+      border-bottom: 3px solid var(--primary-color);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* 表單與按鈕 */
+    h2 { font-size: 18px; color: var(--primary-color); margin-top: 0; }
+    .card { background: #fafafa; border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 25px; }
+    label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; }
+    input[type="text"], textarea, select { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+    .row { display: flex; gap: 15px; }
+    .col { flex: 1; }
+    
+    button { background-color: var(--primary-color); color: white; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; transition: background 0.3s; }
+    button:hover { background-color: #e65c00; }
+    .btn-google { background-color: #4285F4; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top:15px; }
+    .btn-google:hover { background-color: #3367D6; }
+    .btn-danger { background-color: #dc3545; width: auto; padding: 8px 15px; font-size: 14px; }
+    
+    /* 數據表格設計 */
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+    table, th, td { border: 1px solid var(--border-color); }
+    th, td { padding: 10px; text-align: left; }
+    th { background-color: #f2f2f2; position: sticky; top: 0; }
+    .table-container { max-height: 500px; overflow-y: auto; }
+    .badge { background: #e8f5e9; color: #2e7d32; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+
+    #log-box { background: #eef9ff; border-left: 4px solid #00a2ff; padding: 15px; margin-top: 20px; font-family: monospace; white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+  </style>
+
+  <!-- 引入 Firebase SDK (Auth + Firestore) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <!-- 引入 PapaParse -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+
+<!-- 頂部導航列 -->
+<div class="top-nav">
+  <h1>📚 Econ 老師管理後台</h1>
+  <div id="user-info" style="display: none; align-items: center; gap: 15px;">
+    <span id="user-email"></span>
+    <button class="btn-danger" onclick="logout()">登出</button>
+  </div>
+</div>
+
+<div class="container">
+  
+  <!-- 登入介面 -->
+  <div id="login-panel" class="card">
+    <h2 style="text-align: center;">🔐 系統登入</h2>
+    <p style="text-align: center; font-size: 14px; color: #666;">請使用具有寫入權限的 Google 帳號登入</p>
+    <button class="btn-google" onclick="loginWithGoogle()">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path></svg>
+      使用 Google 帳號登入
+    </button>
+  </div>
+
+  <!-- 管理後台 (登入後顯示) -->
+  <div id="admin-panel">
+    
+    <!-- 頁籤選單 -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('tab-upload')">📤 上傳題目</button>
+      <button class="tab-btn" onclick="switchTab('tab-questions'); loadQuestions();">📖 題庫管理</button>
+      <button class="tab-btn" onclick="switchTab('tab-students'); loadStudents();">📊 學生數據分析</button>
+    </div>
+
+    <!-- ================= 頁籤 1：上傳題目 ================= -->
+    <div id="tab-upload" class="tab-content active">
+      
+      <div class="card">
+        <h2>方法 A：批量上傳 CSV</h2>
+        <label>選擇 CSV 檔案：</label>
+        <input type="file" id="csv-file" accept=".csv">
+        <button onclick="uploadCSV()">🚀 開始批量匯入</button>
+      </div>
+
+      <div class="card">
+        <h2>方法 B：手動新增單一題目</h2>
+        <div class="row">
+          <div class="col"><label>ID</label><input type="text" id="q-id" placeholder="DSE_2026_Q1"></div>
+          <div class="col"><label>Chapter</label><input type="text" id="q-chapter" placeholder="Ch10"></div>
+          <div class="col"><label>Skill Type</label><input type="text" id="q-skill" placeholder="Division of labour"></div>
+        </div>
+        <label>題目內容</label>
+        <textarea id="q-text" rows="3"></textarea>
+        
+        <div class="row">
+          <div class="col"><label>選項 A</label><input type="text" id="q-A"></div>
+          <div class="col"><label>選項 B</label><input type="text" id="q-B"></div>
+        </div>
+        <div class="row">
+          <div class="col"><label>選項 C</label><input type="text" id="q-C"></div>
+          <div class="col"><label>選項 D</label><input type="text" id="q-D"></div>
+        </div>
+        <div class="row">
+          <div class="col"><label>答案</label><select id="q-ans"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+        </div>
+        <button onclick="uploadSingleQuestion()">💾 儲存單題</button>
+      </div>
+      
+      <div id="log-box">等待操作中...</div>
+    </div>
+
+    <!-- ================= 頁籤 2：題庫管理 ================= -->
+    <div id="tab-questions" class="tab-content">
+      <h2>目前資料庫中的題目 <span id="q-count" class="badge">0 題</span></h2>
+      <button onclick="loadQuestions()" style="width: auto; margin-bottom: 15px; background: #4a90e2;">🔄 重新整理</button>
+      
+      <div class="table-container">
+        <table id="questions-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Chapter</th>
+              <th>Question Preview</th>
+              <th>Ans</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- JavaScript 會在這裡插入資料 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ================= 頁籤 3：學生數據 ================= -->
+    <div id="tab-students" class="tab-content">
+      <h2>學生作答表現 <span id="s-count" class="badge">0 筆紀錄</span></h2>
+      <button onclick="loadStudents()" style="width: auto; margin-bottom: 15px; background: #4a90e2;">🔄 重新整理</button>
+      
+      <div class="table-container">
+        <table id="students-table">
+          <thead>
+            <tr>
+              <th>提交時間</th>
+              <th>姓名</th>
+              <th>班別</th>
+              <th>作答章節</th>
+              <th>答對題數</th>
+              <th>準確率</th>
+              <th>花費時間</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- JavaScript 會在這裡插入資料 -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ==========================================
+  // 🔴 步驟 1：在此填入你的 Firebase Config
+  // ==========================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyDzDr0k3nxb2nZhgwXSNWMYgLo_e_dTCYU",
+    authDomain: "s4-revision-app.firebaseapp.com",
+    projectId: "s4-revision-app",
+    storageBucket: "s4-revision-app.firebasestorage.app",
+    messagingSenderId: "36649118965",
+    appId: "1:36649118965:web:37415c384a55bcff5ee9bc"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+  const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+  // 工具函數
+  function log(msg) { const b = document.getElementById('log-box'); b.innerText += '\n' + msg; b.scrollTop = b.scrollHeight; }
+  
+  // 頁籤切換邏輯
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  // ==========================================
+  // 🔐 登入狀態監聽
+  // ==========================================
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      document.getElementById('login-panel').style.display = 'none';
+      document.getElementById('admin-panel').style.display = 'block';
+      document.getElementById('user-info').style.display = 'flex';
+      document.getElementById('user-email').innerText = `管理員: ${user.email} (UID: ${user.uid})`;
+    } else {
+      document.getElementById('login-panel').style.display = 'block';
+      document.getElementById('admin-panel').style.display = 'none';
+      document.getElementById('user-info').style.display = 'none';
+    }
+  });
+
+  function loginWithGoogle() { auth.signInWithPopup(googleProvider).catch(e => alert(e.message)); }
+  function logout() { auth.signOut(); }
+
+  // ==========================================
+  // 📤 上傳題目邏輯
+  // ==========================================
+  async function uploadSingleQuestion() {
+    const id = document.getElementById('q-id').value.trim() || `Q_${Date.now()}`;
+    const data = {
+      ID: id,
+      Chapter: document.getElementById('q-chapter').value,
+      Skill_Type: document.getElementById('q-skill').value,
+      Question: document.getElementById('q-text').value,
+      A: document.getElementById('q-A').value, B: document.getElementById('q-B').value,
+      C: document.getElementById('q-C').value, D: document.getElementById('q-D').value,
+      Answer: document.getElementById('q-ans').value,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if(!data.Question) return alert("請輸入題目！");
+    try {
+      await db.collection("questions").doc(id).set(data);
+      log(`✅ 單題儲存成功：${id}`);
+    } catch(e) { log(`❌ 錯誤：${e.message}`); }
+  }
+
+  function uploadCSV() {
+    const file = document.getElementById('csv-file').files[0];
+    if(!file) return alert("請選擇 CSV 檔案");
+    log("開始解析 CSV...");
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true,
+      complete: async function(results) {
+        let count = 0;
+        for (let row of results.data) {
+          const docId = row.ID || `Auto_${Date.now()}_${count}`;
+          await db.collection("questions").doc(docId).set({
+            ID: docId, Chapter: row.Chapter||"", Skill_Type: row.Skill_Type||"",
+            Question: row.Question||"", Image_URL: row.Image_URL||"",
+            A: row.A||"", B: row.B||"", C: row.C||"", D: row.D||"", Answer: row.Answer||"", Explanation: row.Explanation||""
+          });
+          count++;
+        }
+        log(`🎉 批量上傳完成，共匯入 ${count} 題！`);
+      }
+    });
+  }
+
+  // ==========================================
+  // 📖 讀取題庫
+  // ==========================================
+  async function loadQuestions() {
+    const tbody = document.querySelector('#questions-table tbody');
+    tbody.innerHTML = "<tr><td colspan='5'>載入中...</td></tr>";
+    try {
+      const snapshot = await db.collection("questions").limit(50).get(); // 避免一次載入太多
+      document.getElementById('q-count').innerText = `${snapshot.size} 題 (預覽前50筆)`;
+      tbody.innerHTML = "";
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const shortQ = d.Question.substring(0, 40) + (d.Question.length > 40 ? "..." : "");
+        tbody.innerHTML += `
+          <tr>
+            <td>${doc.id}</td>
+            <td><span class="badge">${d.Chapter || 'N/A'}</span></td>
+            <td>${shortQ}</td>
+            <td><strong>${d.Answer || ''}</strong></td>
+            <td><button class="btn-danger" onclick="deleteQuestion('${doc.id}')">刪除</button></td>
+          </tr>
+        `;
+      });
+    } catch(e) { tbody.innerHTML = `<tr><td colspan='5' style="color:red">錯誤: ${e.message}</td></tr>`; }
+  }
+
+  async function deleteQuestion(id) {
+    if(confirm(`確定要刪除題目 ${id} 嗎？`)) {
+      await db.collection("questions").doc(id).delete();
+      loadQuestions();
+    }
+  }
+
+  // ==========================================
+  // 📊 讀取學生數據 (排行榜/成績分析)
+  // ==========================================
+  async function loadStudents() {
+    const tbody = document.querySelector('#students-table tbody');
+    tbody.innerHTML = "<tr><td colspan='7'>載入中...</td></tr>";
+    try {
+      // 假設你的 Collection 叫做 student_results，並依照 Timestamp 降序排列 (最新在前)
+      const snapshot = await db.collection("student_results").orderBy("Timestamp", "desc").limit(50).get();
+      document.getElementById('s-count').innerText = `${snapshot.size} 筆紀錄`;
+      tbody.innerHTML = "";
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        
+        // 格式化時間 (處理 Firebase Timestamp 或一般字串)
+        let timeStr = "未知時間";
+        if (d.Timestamp && d.Timestamp.toDate) {
+          timeStr = d.Timestamp.toDate().toLocaleString(); 
+        } else if (d.Timestamp) {
+          timeStr = new Date(d.Timestamp).toLocaleString();
+        }
+
+        tbody.innerHTML += `
+          <tr>
+            <td style="color:#666; font-size:12px;">${timeStr}</td>
+            <td><strong>${d.Name || 'Anonymous'}</strong></td>
+            <td>${d.Class || '-'}</td>
+            <td>${d.Chapters_Chosen || d.Chapter || '-'}</td>
+            <td>${d.Total_Correct || d.Score || 0}</td>
+            <td><span class="badge" style="background:#fff3cd; color:#856404;">${d.Accuracy || '-'}</span></td>
+            <td>${d.Time_Spent || '-'}</td>
+          </tr>
+        `;
+      });
+    } catch(e) { 
+      // 提醒：如果遇到 orderBy 錯誤，Firebase Console 會給一串連結要求建立 Index，點擊即可！
+      tbody.innerHTML = `<tr><td colspan='7' style="color:red">錯誤: ${e.message}<br><small>(若提示 require an index，請點擊 console (F12) 裡的 Firebase 連結建立索引)</small></td></tr>`; 
+    }
+  }
+</script>
+
+</body>
+</html>
